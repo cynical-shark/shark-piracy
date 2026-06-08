@@ -75,7 +75,6 @@
             );
 
             if (match && match[1]) {
-
                 return JSON.parse(match[1]);
             }
 
@@ -96,56 +95,36 @@
             );
 
             const text = await response.text();
-
             const data = getViewData(text);
 
             if (!data) {
-
-                return {
-                    coords: '',
-                    alliance: ''
-                };
+                return { coords: '', alliance: '' };
             }
 
             let coords = '';
             let alliance = '';
 
             if (data.xCoord && data.yCoord) {
-
                 coords = `[${data.xCoord}:${data.yCoord}]`;
             }
 
             if (data.cities) {
-
                 for (const city of data.cities) {
-
                     if (String(city.id) === String(cityId)) {
-
                         if (city.ownerAllyTag) {
-
                             alliance = `(${city.ownerAllyTag})`;
-                        }
-                        else if (city.ownerAllyName) {
-
+                        } else if (city.ownerAllyName) {
                             alliance = `(${city.ownerAllyName})`;
                         }
-
                         break;
                     }
                 }
             }
 
-            return {
-                coords,
-                alliance
-            };
+            return { coords, alliance };
 
         } catch (err) {
-
-            return {
-                coords: '',
-                alliance: ''
-            };
+            return { coords: '', alliance: '' };
         }
     }
 
@@ -171,10 +150,7 @@
                     : String(index + 1);
 
                 const name = nameEl.innerText.trim();
-
-                const points = bootyEl
-                    ? bootyEl.innerText.trim()
-                    : '0';
+                const points = bootyEl ? bootyEl.innerText.trim() : '0';
 
                 let cityId = 0;
 
@@ -191,10 +167,7 @@
 
                     const match = str.match(/cityId=(\d+)/);
 
-                    if (match) {
-
-                        cityId = match[1];
-                    }
+                    if (match) cityId = match[1];
                 }
 
                 let coords = '';
@@ -207,7 +180,6 @@
                     liveSpan = document.createElement('span');
 
                     liveSpan.className = 'tm_live_info';
-
                     liveSpan.style.marginLeft = '10px';
                     liveSpan.style.color = '#00aa00';
                     liveSpan.style.fontWeight = 'bold';
@@ -218,9 +190,7 @@
                 liveSpan.textContent = ' Loading...';
 
                 if (cityId) {
-
                     const data = await fetchIslandData(cityId);
-
                     coords = data.coords;
                     alliance = data.alliance;
                 }
@@ -231,20 +201,12 @@
                 let line =
                     `${position} . ${points} Capture Points ${name}`;
 
-                if (coords) {
-
-                    line += ` ${coords}`;
-                }
-
-                if (alliance) {
-
-                    line += ` ${alliance}`;
-                }
+                if (coords) line += ` ${coords}`;
+                if (alliance) line += ` ${alliance}`;
 
                 results[index] = line;
 
             } catch (err) {
-
                 console.error(err);
             }
         }
@@ -258,9 +220,7 @@
                 j < i + CONCURRENT_REQUESTS && j < rows.length;
                 j++
             ) {
-
                 batch.push(processSingle(rows[j], j));
-
                 await sleep(START_DELAY);
             }
 
@@ -270,32 +230,22 @@
         const finalText = results.join('\n');
 
         try {
-
             await navigator.clipboard.writeText(finalText);
-
         } catch (err) {
-
-            prompt(
-                'Clipboard access was blocked. Copy manually:',
-                finalText
-            );
+            prompt('Clipboard blocked. Copy manually:', finalText);
         }
 
         setTimeout(() => {
-
-            if (pirateWin && !pirateWin.closed) {
-
-                pirateWin.close();
-            }
-
+            if (pirateWin && !pirateWin.closed) pirateWin.close();
         }, 300);
 
         alert('Piracy list copied to clipboard!');
     }
 
     // =========================
-    // RUN ON BOOKMARK CLICK
+    // RUN ON BOOKMARK CLICK (FIXED)
     // =========================
-    openPirateWindow();
+
+    setTimeout(openPirateWindow, 1500);
 
 })();
