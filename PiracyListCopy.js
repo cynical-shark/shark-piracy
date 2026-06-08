@@ -1,116 +1,207 @@
-(function () {
+javascript:(function () {
+
     'use strict';
 
-    if (window.sharkPiracyDiagLoaded) {
-        alert('Diag already loaded');
+    // =========================
+    // STEP 1: FIND PIRATE FORTRESS ON CURRENT PAGE
+    // =========================
+    const fortress = document.querySelector(
+        '[id^="js_CityPosition"][id$="Link"][title^="Pirate Fortress"]'
+    );
+
+    if (!fortress) {
+        alert('Pirate Fortress not found on this page.');
         return;
     }
-    window.sharkPiracyDiagLoaded = true;
+
+    let url = fortress.href;
+
+    if (!url.includes('buildingConstructionList')) {
+        url += '&dialog=buildingConstructionList&templateView=buildingConstructionList';
+    }
 
     // =========================
-    // STEP 1: BOOKMARK FIRED?
+    // STEP 2: OPEN WINDOW IMMEDIATELY (CRITICAL FIX)
     // =========================
-    alert('STEP 1: Bookmark executed');
+    const pirateWin = window.open(url, '_blank');
 
-    setTimeout(() => {
+    if (!pirateWin) {
+        alert('Popup blocked. Please allow popups for this site.');
+        return;
+    }
 
-        try {
+    // =========================
+    // STEP 3: INJECT FULL SCRIPT INTO NEW WINDOW
+    // =========================
+    const script = pirateWin.document.createElement('script');
 
-            alert('STEP 2: Script running after delay');
+    script.textContent = `
+    (function () {
 
-            // =========================
-            // STEP 3: FIND FORTRESS
-            // =========================
-            const fortress = document.querySelector(
-                '[id^="js_CityPosition"][id$="Link"][title^="Pirate Fortress"]'
-            );
+        const CONCURRENT_REQUESTS = 3;
+        const START_DELAY = 50;
 
-            if (!fortress) {
-                alert('STEP 3 FAILED: Pirate Fortress NOT FOUND on page');
-                return;
-            }
-
-            alert('STEP 3 OK: Fortress found');
-
-            let url = fortress.href;
-
-            if (!url) {
-                alert('STEP 3 FAILED: Fortress has no href');
-                return;
-            }
-
-            alert('STEP 4: Opening pirate window');
-
-            const pirateWin = window.open(url, '_blank');
-
-            if (!pirateWin) {
-                alert('STEP 4 FAILED: Popup blocked by browser');
-                return;
-            }
-
-            alert('STEP 4 OK: Popup opened');
-
-            // =========================
-            // STEP 5: WAIT FOR LOAD
-            // =========================
-            let tries = 0;
-
-            const wait = setInterval(() => {
-
-                tries++;
-
-                try {
-
-                    if (tries > 20) {
-                        clearInterval(wait);
-                        alert('STEP 5 FAILED: Highscore did not load in time');
-                        return;
-                    }
-
-                    const doc = pirateWin.document;
-
-                    const rows = doc.querySelectorAll('#pirateHighscore li');
-
-                    if (!rows.length) {
-                        if (tries % 2 === 0) {
-                            alert('STEP 5: waiting for highscore... attempt ' + tries);
-                        }
-                        return;
-                    }
-
-                    clearInterval(wait);
-
-                    alert('STEP 5 OK: Found rows = ' + rows.length);
-
-                    // =========================
-                    // STEP 6: TEST ROW READ
-                    // =========================
-                    const first = rows[0];
-
-                    if (!first) {
-                        alert('STEP 6 FAILED: No rows found after load');
-                        return;
-                    }
-
-                    alert('STEP 6 OK: Rows accessible');
-
-                    // =========================
-                    // STEP 7: DONE
-                    // =========================
-                    alert('DIAGNOSTIC COMPLETE: Core pipeline works');
-
-                } catch (e) {
-                    alert('ERROR: ' + e.message);
-                    console.error(e);
-                }
-
-            }, 500);
-
-        } catch (e) {
-            alert('FATAL ERROR: ' + e.message);
-            console.error(e);
+        function sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
         }
 
-    }, 1500);
+        function getViewData(responseText) {
+            try {
+                const match = responseText.match(
+                    /\\["updateBackgroundData",\\s*([\\s\\S]*?)\\]\\s*,\\s*\\["updateTemplateData"/
+                );
+                if (match && match[1]) return JSON.parse(match[1]);
+            } catch (e) {}
+            return null;
+        }
+
+        async function fetchIslandData(cityId) {
+            try {
+                const response = await fetch('/index.php?view=island&cityId=' + cityId);
+                const text = await response.text();
+                const data = getViewData(text);
+
+                if (!data) return { coords: '', alliance: '' };
+
+                let coords = '';
+                let alliance = '';
+
+                if (data.xCoord && data.yCoord) {
+                    coords = '[' + data.xCoord + ':' + data.yCoord + ']';
+                }
+
+                if (data.cities) {
+                    for (const city of data.cities) {
+                        if (String(city.id) === String(cityId)) {
+                            if (city.ownerAllyTag) {
+                                alliance = '(' + city.ownerAllyTag + ')';
+                            } else if (city.ownerAllyName) {
+                                alliance = '(' + city.ownerAllyName + ')';
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                return { coords, alliance };
+
+            } catch (err) {
+                return { coords: '', alliance: '' };
+            }
+        }
+
+        async function processPlayers(rows, pirateWin) {
+
+            const results = [];
+
+            async function processSingle(row, index) {
+
+                const placeEl = row.querySelector('.place');
+                const nameEl = row.querySelector('.userName');
+                const bootyEl = row.querySelector('.pirateBooty');
+
+                if (!nameEl) return;
+
+                let position = placeEl
+                    ? placeEl.innerText.replace('.', '').trim()
+                    : String(index + 1);
+
+                const name = nameEl.innerText.trim();
+                const points = bootyEl ? bootyEl.innerText.trim() : '0';
+
+                let cityId = 0;
+
+                const link = row.querySelector('a.userName') || row.querySelector('a');
+
+                if (link) {
+                    const str = link.getAttribute('onclick') || link.href || '';
+                    const match = str.match(/cityId=(\\d+)/);
+                    if (match) cityId = match[1];
+                }
+
+                let coords = '';
+                let alliance = '';
+
+                let liveSpan = row.querySelector('.tm_live_info');
+
+                if (!liveSpan) {
+                    liveSpan = document.createElement('span');
+                    liveSpan.className = 'tm_live_info';
+                    liveSpan.style.marginLeft = '10px';
+                    liveSpan.style.color = '#00aa00';
+                    liveSpan.style.fontWeight = 'bold';
+                    row.appendChild(liveSpan);
+                }
+
+                liveSpan.textContent = ' Loading...';
+
+                if (cityId) {
+                    const data = await fetchIslandData(cityId);
+                    coords = data.coords;
+                    alliance = data.alliance;
+                }
+
+                liveSpan.textContent = (coords + ' ' + alliance).trim();
+
+                let line = position + ' . ' + points + ' Capture Points ' + name;
+
+                if (coords) line += ' ' + coords;
+                if (alliance) line += ' ' + alliance;
+
+                results[index] = line;
+            }
+
+            const rows = document.querySelectorAll('#pirateHighscore li');
+
+            for (let i = 0; i < rows.length; i += CONCURRENT_REQUESTS) {
+
+                const batch = [];
+
+                for (
+                    let j = i;
+                    j < i + CONCURRENT_REQUESTS && j < rows.length;
+                    j++
+                ) {
+                    batch.push(processSingle(rows[j], j));
+                    await sleep(START_DELAY);
+                }
+
+                await Promise.all(batch);
+            }
+
+            const finalText = results.join('\\n');
+
+            try {
+                await navigator.clipboard.writeText(finalText);
+            } catch (err) {
+                prompt('Clipboard blocked. Copy manually:', finalText);
+            }
+
+            alert('Piracy list copied to clipboard!');
+        }
+
+        // =========================
+        // WAIT FOR LOAD THEN RUN
+        // =========================
+        const wait = setInterval(() => {
+
+            try {
+
+                const rows = document.querySelectorAll('#pirateHighscore li');
+
+                if (!rows.length) return;
+
+                clearInterval(wait);
+
+                processPlayers(rows, window);
+
+            } catch (e) {}
+
+        }, 500);
+
+    })();
+    `;
+
+    pirateWin.document.documentElement.appendChild(script);
 
 })();
