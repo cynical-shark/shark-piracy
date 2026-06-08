@@ -1,105 +1,36 @@
 (function () {
     'use strict';
 
-    // Prevent loading twice
-    if (window.sharkPiracyLoaded) {
-        console.log('Shark Piracy Script already loaded');
-        return;
-    }
-
+    // Prevent double run
+    if (window.sharkPiracyLoaded) return;
     window.sharkPiracyLoaded = true;
 
-    // =========================
-    // SAFE SPEED SETTINGS
-    // =========================
+    alert('Piracy script started');
+
     const CONCURRENT_REQUESTS = 3;
     const START_DELAY = 50;
 
-    // =========================
-    // OPEN PIRATE WINDOW
-    // =========================
-    async function openPirateWindow() {
-
-        const fortress = document.querySelector(
-            '[id^="js_CityPosition"][id$="Link"][title^="Pirate Fortress"]'
-        );
-
-        if (!fortress) {
-            alert('Pirate Fortress not found.');
-            return;
-        }
-
-        let url = fortress.href;
-
-        if (!url.includes('buildingConstructionList')) {
-            url += '&dialog=buildingConstructionList&templateView=buildingConstructionList';
-        }
-
-        const pirateWin = window.open(url, '_blank');
-
-        const waitForLoad = setInterval(async () => {
-
-            try {
-
-                const doc = pirateWin.document;
-
-                const rows = doc.querySelectorAll('#pirateHighscore li');
-
-                if (!rows.length) return;
-
-                clearInterval(waitForLoad);
-
-                await processPlayers(rows, pirateWin);
-
-            } catch (e) {}
-
-        }, 500);
-    }
-
-    // =========================
-    // SLEEP
-    // =========================
     function sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+        return new Promise(r => setTimeout(r, ms));
     }
 
-    // =========================
-    // PARSE GAME JSON
-    // =========================
     function getViewData(responseText) {
-
         try {
-
             const match = responseText.match(
                 /\["updateBackgroundData",\s*([\s\S]*?)\]\s*,\s*\["updateTemplateData"/
             );
-
-            if (match && match[1]) {
-                return JSON.parse(match[1]);
-            }
-
+            if (match && match[1]) return JSON.parse(match[1]);
         } catch (e) {}
-
         return null;
     }
 
-    // =========================
-    // FETCH COORDS + ALLIANCE
-    // =========================
     async function fetchIslandData(cityId) {
-
         try {
-
-            const response = await fetch(
-                `/index.php?view=island&cityId=${cityId}`
-            );
-
+            const response = await fetch(`/index.php?view=island&cityId=${cityId}`);
             const text = await response.text();
             const data = getViewData(text);
 
-            if (!data) {
-                return { coords: '', alliance: '' };
-            }
+            if (!data) return { coords: '', alliance: '' };
 
             let coords = '';
             let alliance = '';
@@ -128,15 +59,11 @@
         }
     }
 
-    // =========================
-    // PROCESS PLAYERS
-    // =========================
     async function processPlayers(rows, pirateWin) {
 
         const results = [];
 
         async function processSingle(row, index) {
-
             try {
 
                 const placeEl = row.querySelector('.place');
@@ -154,19 +81,11 @@
 
                 let cityId = 0;
 
-                const link =
-                    row.querySelector('a.userName') ||
-                    row.querySelector('a');
+                const link = row.querySelector('a.userName') || row.querySelector('a');
 
                 if (link) {
-
-                    const str =
-                        link.getAttribute('onclick') ||
-                        link.href ||
-                        '';
-
+                    const str = link.getAttribute('onclick') || link.href || '';
                     const match = str.match(/cityId=(\d+)/);
-
                     if (match) cityId = match[1];
                 }
 
@@ -176,14 +95,11 @@
                 let liveSpan = row.querySelector('.tm_live_info');
 
                 if (!liveSpan) {
-
                     liveSpan = document.createElement('span');
-
                     liveSpan.className = 'tm_live_info';
                     liveSpan.style.marginLeft = '10px';
                     liveSpan.style.color = '#00aa00';
                     liveSpan.style.fontWeight = 'bold';
-
                     row.appendChild(liveSpan);
                 }
 
@@ -195,12 +111,9 @@
                     alliance = data.alliance;
                 }
 
-                liveSpan.textContent =
-                    ` ${coords} ${alliance}`.trim();
+                liveSpan.textContent = ` ${coords} ${alliance}`.trim();
 
-                let line =
-                    `${position} . ${points} Capture Points ${name}`;
-
+                let line = `${position} . ${points} Capture Points ${name}`;
                 if (coords) line += ` ${coords}`;
                 if (alliance) line += ` ${alliance}`;
 
@@ -242,10 +155,48 @@
         alert('Piracy list copied to clipboard!');
     }
 
-    // =========================
-    // RUN ON BOOKMARK CLICK (FIXED)
-    // =========================
+    async function openPirateWindow() {
 
-    setTimeout(openPirateWindow, 1500);
+        const fortress = document.querySelector(
+            '[id^="js_CityPosition"][id$="Link"][title^="Pirate Fortress"]'
+        );
+
+        if (!fortress) {
+            alert('Pirate Fortress not found.');
+            return;
+        }
+
+        let url = fortress.href;
+
+        if (!url.includes('buildingConstructionList')) {
+            url += '&dialog=buildingConstructionList&templateView=buildingConstructionList';
+        }
+
+        const pirateWin = window.open(url, '_blank');
+
+        const waitForLoad = setInterval(async () => {
+            try {
+                const doc = pirateWin.document;
+                const rows = doc.querySelectorAll('#pirateHighscore li');
+
+                if (!rows.length) return;
+
+                clearInterval(waitForLoad);
+
+                await processPlayers(rows, pirateWin);
+
+            } catch (e) {}
+        }, 500);
+    }
+
+    // SAFE START (THIS IS THE KEY FIX)
+    setTimeout(() => {
+        try {
+            openPirateWindow();
+        } catch (e) {
+            alert('Script error: ' + e.message);
+            console.error(e);
+        }
+    }, 1500);
 
 })();
