@@ -1,33 +1,4 @@
-javascript:(function () {
-
-    'use strict';
-
-    const fortress = document.querySelector(
-        '[id^="js_CityPosition"][id$="Link"][title^="Pirate Fortress"]'
-    );
-
-    if (!fortress) {
-        alert('Pirate Fortress not found');
-        return;
-    }
-
-    let url = fortress.href;
-
-    if (!url.includes('buildingConstructionList')) {
-        url += '&dialog=buildingConstructionList&templateView=buildingConstructionList';
-    }
-
-    // =========================
-    // OPEN WINDOW IMMEDIATELY
-    // =========================
-    const win = window.open(url, '_blank');
-
-    if (!win) {
-        alert('Popup blocked');
-        return;
-    }
-
-    alert('Pirate window opened. Waiting for load...');
+javascript:(async function () {
 
     const CONCURRENT_REQUESTS = 3;
     const START_DELAY = 50;
@@ -81,107 +52,75 @@ javascript:(function () {
         }
     }
 
-    async function processPlayers(rows) {
+    const rows = document.querySelectorAll('#pirateHighscore li');
 
-        const results = [];
+    if (!rows.length) {
+        alert('No pirate list found — make sure you are on the highscore page.');
+        return;
+    }
 
-        async function processSingle(row, index) {
+    alert('Found ' + rows.length + ' players. Processing...');
 
-            const placeEl = row.querySelector('.place');
-            const nameEl = row.querySelector('.userName');
-            const bootyEl = row.querySelector('.pirateBooty');
+    const results = [];
 
-            if (!nameEl) return;
+    async function processSingle(row, index) {
 
-            let position = placeEl
-                ? placeEl.innerText.replace('.', '').trim()
-                : String(index + 1);
+        const placeEl = row.querySelector('.place');
+        const nameEl = row.querySelector('.userName');
+        const bootyEl = row.querySelector('.pirateBooty');
 
-            const name = nameEl.innerText.trim();
-            const points = bootyEl ? bootyEl.innerText.trim() : '0';
+        if (!nameEl) return;
 
-            let cityId = 0;
+        let position = placeEl
+            ? placeEl.innerText.replace('.', '').trim()
+            : String(index + 1);
 
-            const link = row.querySelector('a.userName') || row.querySelector('a');
+        const name = nameEl.innerText.trim();
+        const points = bootyEl ? bootyEl.innerText.trim() : '0';
 
-            if (link) {
-                const str = link.getAttribute('onclick') || link.href || '';
-                const match = str.match(/cityId=(\d+)/);
-                if (match) cityId = match[1];
-            }
+        let cityId = 0;
 
-            let coords = '';
-            let alliance = '';
+        const link = row.querySelector('a.userName') || row.querySelector('a');
 
-            let liveSpan = row.querySelector('.tm_live_info');
-
-            if (!liveSpan) {
-                liveSpan = document.createElement('span');
-                liveSpan.className = 'tm_live_info';
-                liveSpan.style.marginLeft = '10px';
-                liveSpan.style.color = '#00aa00';
-                liveSpan.style.fontWeight = 'bold';
-                row.appendChild(liveSpan);
-            }
-
-            liveSpan.textContent = 'Loading...';
-
-            if (cityId) {
-                const data = await fetchIslandData(cityId);
-                coords = data.coords;
-                alliance = data.alliance;
-            }
-
-            liveSpan.textContent = (coords + ' ' + alliance).trim();
-
-            let line = `${position} . ${points} Capture Points ${name}`;
-
-            if (coords) line += ` ${coords}`;
-            if (alliance) line += ` ${alliance}`;
-
-            results[index] = line;
+        if (link) {
+            const str = link.getAttribute('onclick') || link.href || '';
+            const match = str.match(/cityId=(\d+)/);
+            if (match) cityId = match[1];
         }
 
-        const wait = setInterval(async () => {
+        let coords = '';
+        let alliance = '';
 
-            try {
+        if (cityId) {
+            const data = await fetchIslandData(cityId);
+            coords = data.coords;
+            alliance = data.alliance;
+        }
 
-                const rows = win.document.querySelectorAll('#pirateHighscore li');
+        let line = `${position} . ${points} Capture Points ${name}`;
+        if (coords) line += ` ${coords}`;
+        if (alliance) line += ` ${alliance}`;
 
-                if (!rows.length) return;
+        results[index] = line;
+    }
 
-                clearInterval(wait);
+    for (let i = 0; i < rows.length; i += CONCURRENT_REQUESTS) {
 
-                for (let i = 0; i < rows.length; i += CONCURRENT_REQUESTS) {
+        const batch = [];
 
-                    const batch = [];
+        for (let j = i; j < i + CONCURRENT_REQUESTS && j < rows.length; j++) {
+            batch.push(processSingle(rows[j], j));
+            await sleep(START_DELAY);
+        }
 
-                    for (
-                        let j = i;
-                        j < i + CONCURRENT_REQUESTS && j < rows.length;
-                        j++
-                    ) {
-                        batch.push(processSingle(rows[j], j));
-                        await sleep(START_DELAY);
-                    }
+        await Promise.all(batch);
+    }
 
-                    await Promise.all(batch);
-                }
-
-                const finalText = results.join('\n');
-
-                try {
-                    await navigator.clipboard.writeText(finalText);
-                } catch (err) {
-                    prompt('Copy manually:', finalText);
-                }
-
-                alert('Piracy list copied to clipboard!');
-
-            } catch (e) {}
-
-        }, 500);
-
+    try {
+        await navigator.clipboard.writeText(results.join('\\n'));
+        alert('Copied to clipboard!');
+    } catch (e) {
+        prompt('Copy manually:', results.join('\\n'));
     }
 
 })();
